@@ -33,6 +33,7 @@ function toProjectInput(body) {
 
 function toFeedbackInput(body) {
     return {
+        projectId: Number(body.projectId),
         author: body.author,
         comment: body.comment,
         rating: Number(body.rating)

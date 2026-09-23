@@ -1,7 +1,9 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const swaggerUi = require('swagger-ui-express');
 
 const repositories = require('./repositories');
+const swaggerSpec = require('./swagger');
 
 const {
     toProfileInput,
@@ -19,6 +21,16 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// =====================================================
+// Swagger
+// =====================================================
+
+app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec)
+);
 
 // =====================================================
 // Rota inicial
@@ -150,8 +162,7 @@ app.post(
         const data = toTechnologyInput(req.body);
 
         try {
-            const technology =
-                await repositories.createTechnology(data);
+            const technology = await repositories.createTechnology(data);
 
             return res.status(201).json(
                 toTechnologyResponse(technology)
@@ -166,7 +177,7 @@ app.post(
             console.error(error);
 
             return res.status(500).json({
-                message: 'Erro interno ao cadastrar a tecnologia.'
+                message: 'Erro interno ao criar a tecnologia.'
             });
         }
     }
@@ -179,8 +190,7 @@ app.post(
 
 app.get('/api/technologies', async (req, res) => {
     try {
-        const technologies =
-            await repositories.listTechnologies();
+        const technologies = await repositories.listTechnologies();
 
         return res.json(
             technologies.map(toTechnologyResponse)
@@ -196,7 +206,7 @@ app.get('/api/technologies', async (req, res) => {
 
 // =====================================================
 // POST /api/projects
-// Cadastrar projeto
+// Criar projeto
 // =====================================================
 
 app.post(
@@ -205,32 +215,34 @@ app.post(
         body('title')
             .trim()
             .notEmpty()
-            .withMessage('O título do projeto é obrigatório.'),
+            .withMessage('O título é obrigatório.'),
 
-        body('url')
+        body('description')
+            .trim()
+            .notEmpty()
+            .withMessage('A descrição é obrigatória.'),
+
+        body('profileId')
+            .isInt({ min: 1 })
+            .withMessage('O profileId deve ser um número inteiro positivo.'),
+
+        body('repositoryUrl')
+            .optional({ checkFalsy: true })
             .trim()
             .isURL({
                 protocols: ['http', 'https'],
                 require_protocol: true
             })
-            .withMessage('Informe uma URL válida.'),
+            .withMessage('Informe uma URL de repositório válida.'),
 
-        body('profileId')
-            .isInt({ min: 1 })
-            .withMessage('Informe um ID de perfil válido.'),
-
-        body('technologyIds')
-            .optional()
-            .isArray()
-            .withMessage(
-                'technologyIds deve ser uma lista de IDs.'
-            ),
-
-        body('technologyIds.*')
-            .isInt({ min: 1 })
-            .withMessage(
-                'Cada ID de tecnologia deve ser um número válido.'
-            )
+        body('demoUrl')
+            .optional({ checkFalsy: true })
+            .trim()
+            .isURL({
+                protocols: ['http', 'https'],
+                require_protocol: true
+            })
+            .withMessage('Informe uma URL de demonstração válida.')
     ],
     async (req, res) => {
         const errors = validationResult(req);
@@ -244,24 +256,16 @@ app.post(
         const data = toProjectInput(req.body);
 
         try {
-            const project =
-                await repositories.createProject(data);
+            const project = await repositories.createProject(data);
 
             return res.status(201).json(
                 toProjectResponse(project)
             );
         } catch (error) {
-            if (error.code === 'P2025') {
-                return res.status(404).json({
-                    message:
-                        'Perfil ou tecnologia não encontrada.'
-                });
-            }
-
             console.error(error);
 
             return res.status(500).json({
-                message: 'Erro interno ao cadastrar o projeto.'
+                message: 'Erro interno ao criar o projeto.'
             });
         }
     }
@@ -274,93 +278,65 @@ app.post(
 
 app.get('/api/projects', async (req, res) => {
     try {
-        const technology =
-            typeof req.query.technology === 'string'
-                ? req.query.technology.trim()
-                : undefined;
+        const technology = req.query.technology;
 
-        const page = Number(req.query.page ?? 1);
-        const limit = Number(req.query.limit ?? 10);
+        const page = Math.max(
+            Number(req.query.page) || 1,
+            1
+        );
 
-        if (
-            !Number.isInteger(page) ||
-            page < 1
-        ) {
-            return res.status(400).json({
-                message:
-                    'O parâmetro page deve ser um número inteiro maior que zero.'
-            });
-        }
+        const limit = Math.min(
+            Math.max(Number(req.query.limit) || 10, 1),
+            100
+        );
 
-        if (
-            !Number.isInteger(limit) ||
-            limit < 1 ||
-            limit > 100
-        ) {
-            return res.status(400).json({
-                message:
-                    'O parâmetro limit deve ser um número inteiro entre 1 e 100.'
-            });
-        }
-
-        const result =
-            await repositories.listProjects({
-                technology,
-                page,
-                limit
-            });
+        const result = await repositories.listProjects({
+            technology,
+            page,
+            limit
+        });
 
         return res.json({
-            data: result.projects.map(toProjectResponse),
-
-            pagination: {
-                page,
-                limit,
-                total: result.total,
-                totalPages: Math.ceil(
-                    result.total / limit
-                )
-            }
+            page,
+            limit,
+            total: result.total,
+            projects: result.projects.map(toProjectResponse)
         });
     } catch (error) {
         console.error(error);
 
         return res.status(500).json({
-            message:
-                'Erro interno ao consultar os projetos.'
+            message: 'Erro interno ao consultar os projetos.'
         });
     }
 });
 
 // =====================================================
 // POST /api/projects/:id/feedbacks
-// Cadastrar feedback com nota de 1 a 5
+// Criar feedback
 // =====================================================
 
 app.post(
     '/api/projects/:id/feedbacks',
     [
-        body('author')
-            .trim()
-            .notEmpty()
-            .withMessage(
-                'O nome do autor é obrigatório.'
-            ),
-
         body('comment')
             .trim()
             .notEmpty()
-            .withMessage(
-                'O comentário é obrigatório.'
-            ),
+            .withMessage('O comentário é obrigatório.'),
 
         body('rating')
             .isInt({ min: 1, max: 5 })
-            .withMessage(
-                'A nota deve ser um número inteiro entre 1 e 5.'
-            )
+            .withMessage('A avaliação deve ser um número entre 1 e 5.')
     ],
     async (req, res) => {
+        const projectId = Number(req.params.id);
+
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+            return res.status(400).json({
+                message: 'ID do projeto inválido.'
+            });
+        }
+
         const errors = validationResult(req);
 
         if (!errors.isEmpty()) {
@@ -369,43 +345,22 @@ app.post(
             });
         }
 
-        const projectId = Number(req.params.id);
-
-        if (
-            !Number.isInteger(projectId) ||
-            projectId <= 0
-        ) {
-            return res.status(400).json({
-                message: 'ID do projeto inválido.'
-            });
-        }
-
-        const data = toFeedbackInput(req.body);
+        const data = toFeedbackInput({
+            ...req.body,
+            projectId
+        });
 
         try {
-            const feedback =
-                await repositories.createFeedback({
-                    projectId,
-                    author: data.author,
-                    comment: data.comment,
-                    rating: data.rating
-                });
+            const feedback = await repositories.createFeedback(data);
 
             return res.status(201).json(
                 toFeedbackResponse(feedback)
             );
         } catch (error) {
-            if (error.code === 'P2025') {
-                return res.status(404).json({
-                    message: 'Projeto não encontrado.'
-                });
-            }
-
             console.error(error);
 
             return res.status(500).json({
-                message:
-                    'Erro interno ao cadastrar o feedback.'
+                message: 'Erro interno ao criar o feedback.'
             });
         }
     }
@@ -413,65 +368,43 @@ app.post(
 
 // =====================================================
 // PUT /api/projects/:id/upvote
-// Incrementar curtidas do projeto
+// Incrementar upvotes do projeto
 // =====================================================
 
-app.put(
-    '/api/projects/:id/upvote',
-    async (req, res) => {
-        const projectId = Number(req.params.id);
+app.put('/api/projects/:id/upvote', async (req, res) => {
+    const projectId = Number(req.params.id);
 
-        if (
-            !Number.isInteger(projectId) ||
-            projectId <= 0
-        ) {
-            return res.status(400).json({
-                message: 'ID do projeto inválido.'
-            });
-        }
-
-        try {
-            const project =
-                await repositories.upvoteProject(
-                    projectId
-                );
-
-            return res.json({
-                message:
-                    'Curtida adicionada com sucesso.',
-                project: toProjectResponse(project)
-            });
-        } catch (error) {
-            if (error.code === 'P2025') {
-                return res.status(404).json({
-                    message: 'Projeto não encontrado.'
-                });
-            }
-
-            console.error(error);
-
-            return res.status(500).json({
-                message:
-                    'Erro interno ao adicionar a curtida.'
-            });
-        }
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+        return res.status(400).json({
+            message: 'ID do projeto inválido.'
+        });
     }
-);
 
-// =====================================================
-// Iniciar servidor
-// =====================================================
+    try {
+        const project = await repositories.upvoteProject(projectId);
 
-app.listen(PORT, (error) => {
-    if (error) {
-        console.error(
-            'Erro ao iniciar o servidor:',
-            error.message
+        if (!project) {
+            return res.status(404).json({
+                message: 'Projeto não encontrado.'
+            });
+        }
+
+        return res.json(
+            toProjectResponse(project)
         );
-        return;
-    }
+    } catch (error) {
+        console.error(error);
 
-    console.log(
-        `Servidor rodando em http://localhost:${PORT}`
-    );
+        return res.status(500).json({
+            message: 'Erro interno ao registrar o upvote.'
+        });
+    }
+});
+
+// =====================================================
+// Inicialização do servidor
+// =====================================================
+
+app.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
