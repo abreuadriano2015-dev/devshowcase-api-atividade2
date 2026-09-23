@@ -2,8 +2,16 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const swaggerUi = require('swagger-ui-express');
 
-const repositories = require('./repositories');
-const swaggerSpec = require('./swagger');
+const {
+    createProfile,
+    findProfileById,
+    createTechnology,
+    listTechnologies,
+    createProject,
+    listProjects,
+    createFeedback,
+    upvoteProject
+} = require('./repositories');
 
 const {
     toProfileInput,
@@ -16,25 +24,18 @@ const {
     toFeedbackResponse
 } = require('./dtos');
 
-const app = express();
+const swaggerSpec = require('./swagger');
 
+const app = express();
 const PORT = 3000;
 
 app.use(express.json());
-
-// =====================================================
-// Swagger
-// =====================================================
 
 app.use(
     '/api-docs',
     swaggerUi.serve,
     swaggerUi.setup(swaggerSpec)
 );
-
-// =====================================================
-// Rota inicial
-// =====================================================
 
 app.get('/', (req, res) => {
     res.json({
@@ -43,8 +44,7 @@ app.get('/', (req, res) => {
 });
 
 // =====================================================
-// POST /api/profiles
-// Criar perfil
+// PERFIS
 // =====================================================
 
 app.post(
@@ -56,90 +56,73 @@ app.post(
             .withMessage('O nome é obrigatório.'),
 
         body('email')
-            .trim()
             .isEmail()
             .withMessage('Informe um e-mail válido.'),
 
+        body('bio')
+            .optional()
+            .isString()
+            .withMessage('A bio deve ser um texto.'),
+
         body('avatarUrl')
-            .optional({ checkFalsy: true })
-            .trim()
-            .isURL({
-                protocols: ['http', 'https'],
-                require_protocol: true
-            })
-            .withMessage('Informe uma URL de avatar válida.')
+            .optional({ nullable: true })
+            .isURL()
+            .withMessage('O avatarUrl deve ser uma URL válida.')
     ],
-    async (req, res) => {
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                errors: errors.array()
-            });
-        }
-
-        const data = toProfileInput(req.body);
-
+    async (req, res, next) => {
         try {
-            const profile = await repositories.createProfile(data);
+            const errors = validationResult(req);
 
-            return res.status(201).json(
-                toProfileResponse(profile)
-            );
-        } catch (error) {
-            if (error.code === 'P2002') {
-                return res.status(409).json({
-                    message: 'Este e-mail já está cadastrado.'
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    message: 'Erro de validação.',
+                    errors: errors.array()
                 });
             }
 
-            console.error(error);
+            const input = toProfileInput(req.body);
+            const profile = await createProfile(input);
 
-            return res.status(500).json({
-                message: 'Erro interno ao criar o perfil.'
-            });
+            res.status(201).json(
+                toProfileResponse(profile)
+            );
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+app.get(
+    '/api/profiles/:id',
+    async (req, res, next) => {
+        try {
+            const id = Number(req.params.id);
+
+            if (!Number.isInteger(id) || id <= 0) {
+                return res.status(400).json({
+                    message: 'O ID do perfil deve ser um número inteiro positivo.'
+                });
+            }
+
+            const profile = await findProfileById(id);
+
+            if (!profile) {
+                return res.status(404).json({
+                    message: 'Perfil não encontrado.'
+                });
+            }
+
+            res.json(
+                toProfileResponse(profile)
+            );
+        } catch (error) {
+            next(error);
         }
     }
 );
 
 // =====================================================
-// GET /api/profiles/:id
-// Consultar perfil por ID
-// =====================================================
-
-app.get('/api/profiles/:id', async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({
-            message: 'ID inválido.'
-        });
-    }
-
-    try {
-        const profile = await repositories.findProfileById(id);
-
-        if (!profile) {
-            return res.status(404).json({
-                message: 'Perfil não encontrado.'
-            });
-        }
-
-        return res.json(
-            toProfileResponse(profile)
-        );
-    } catch (error) {
-        console.error(error);
-
-        return res.status(500).json({
-            message: 'Erro interno ao consultar o perfil.'
-        });
-    }
-});
-
-// =====================================================
-// POST /api/technologies
-// Cadastrar tecnologia
+// TECNOLOGIAS
 // =====================================================
 
 app.post(
@@ -150,63 +133,46 @@ app.post(
             .notEmpty()
             .withMessage('O nome da tecnologia é obrigatório.')
     ],
-    async (req, res) => {
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                errors: errors.array()
-            });
-        }
-
-        const data = toTechnologyInput(req.body);
-
+    async (req, res, next) => {
         try {
-            const technology = await repositories.createTechnology(data);
+            const errors = validationResult(req);
 
-            return res.status(201).json(
-                toTechnologyResponse(technology)
-            );
-        } catch (error) {
-            if (error.code === 'P2002') {
-                return res.status(409).json({
-                    message: 'Esta tecnologia já está cadastrada.'
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    message: 'Erro de validação.',
+                    errors: errors.array()
                 });
             }
 
-            console.error(error);
+            const input = toTechnologyInput(req.body);
+            const technology = await createTechnology(input);
 
-            return res.status(500).json({
-                message: 'Erro interno ao criar a tecnologia.'
-            });
+            res.status(201).json(
+                toTechnologyResponse(technology)
+            );
+        } catch (error) {
+            next(error);
+        }
+    }
+);
+
+app.get(
+    '/api/technologies',
+    async (req, res, next) => {
+        try {
+            const technologies = await listTechnologies();
+
+            res.json(
+                technologies.map(toTechnologyResponse)
+            );
+        } catch (error) {
+            next(error);
         }
     }
 );
 
 // =====================================================
-// GET /api/technologies
-// Listar tecnologias
-// =====================================================
-
-app.get('/api/technologies', async (req, res) => {
-    try {
-        const technologies = await repositories.listTechnologies();
-
-        return res.json(
-            technologies.map(toTechnologyResponse)
-        );
-    } catch (error) {
-        console.error(error);
-
-        return res.status(500).json({
-            message: 'Erro interno ao consultar as tecnologias.'
-        });
-    }
-});
-
-// =====================================================
-// POST /api/projects
-// Criar projeto
+// PROJETOS
 // =====================================================
 
 app.post(
@@ -218,107 +184,97 @@ app.post(
             .withMessage('O título é obrigatório.'),
 
         body('description')
-            .trim()
-            .notEmpty()
-            .withMessage('A descrição é obrigatória.'),
+            .optional()
+            .isString()
+            .withMessage('A descrição deve ser um texto.'),
+
+        body('url')
+            .isURL()
+            .withMessage('A URL do projeto deve ser válida.'),
 
         body('profileId')
             .isInt({ min: 1 })
             .withMessage('O profileId deve ser um número inteiro positivo.'),
 
-        body('repositoryUrl')
-            .optional({ checkFalsy: true })
-            .trim()
-            .isURL({
-                protocols: ['http', 'https'],
-                require_protocol: true
-            })
-            .withMessage('Informe uma URL de repositório válida.'),
-
-        body('demoUrl')
-            .optional({ checkFalsy: true })
-            .trim()
-            .isURL({
-                protocols: ['http', 'https'],
-                require_protocol: true
-            })
-            .withMessage('Informe uma URL de demonstração válida.')
+        body('technologyIds')
+            .isArray({ min: 1 })
+            .withMessage('Informe pelo menos uma tecnologia.')
     ],
-    async (req, res) => {
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                errors: errors.array()
-            });
-        }
-
-        const data = toProjectInput(req.body);
-
+    async (req, res, next) => {
         try {
-            const project = await repositories.createProject(data);
+            const errors = validationResult(req);
 
-            return res.status(201).json(
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    message: 'Erro de validação.',
+                    errors: errors.array()
+                });
+            }
+
+            const input = toProjectInput(req.body);
+            const project = await createProject(input);
+
+            res.status(201).json(
                 toProjectResponse(project)
             );
         } catch (error) {
-            console.error(error);
+            next(error);
+        }
+    }
+);
 
-            return res.status(500).json({
-                message: 'Erro interno ao criar o projeto.'
+app.get(
+    '/api/projects',
+    async (req, res, next) => {
+        try {
+            const technology = req.query.technology || undefined;
+
+            const page = Number(req.query.page || 1);
+            const limit = Number(req.query.limit || 10);
+
+            if (
+                !Number.isInteger(page) ||
+                page < 1 ||
+                !Number.isInteger(limit) ||
+                limit < 1
+            ) {
+                return res.status(400).json({
+                    message: 'page e limit devem ser números inteiros positivos.'
+                });
+            }
+
+            const result = await listProjects({
+                technology,
+                page,
+                limit
             });
+
+            res.json({
+                page,
+                limit,
+                total: result.total,
+                projects: result.projects.map(
+                    toProjectResponse
+                )
+            });
+        } catch (error) {
+            next(error);
         }
     }
 );
 
 // =====================================================
-// GET /api/projects
-// Listar projetos com filtro e paginação
-// =====================================================
-
-app.get('/api/projects', async (req, res) => {
-    try {
-        const technology = req.query.technology;
-
-        const page = Math.max(
-            Number(req.query.page) || 1,
-            1
-        );
-
-        const limit = Math.min(
-            Math.max(Number(req.query.limit) || 10, 1),
-            100
-        );
-
-        const result = await repositories.listProjects({
-            technology,
-            page,
-            limit
-        });
-
-        return res.json({
-            page,
-            limit,
-            total: result.total,
-            projects: result.projects.map(toProjectResponse)
-        });
-    } catch (error) {
-        console.error(error);
-
-        return res.status(500).json({
-            message: 'Erro interno ao consultar os projetos.'
-        });
-    }
-});
-
-// =====================================================
-// POST /api/projects/:id/feedbacks
-// Criar feedback
+// FEEDBACKS
 // =====================================================
 
 app.post(
     '/api/projects/:id/feedbacks',
     [
+        body('author')
+            .trim()
+            .notEmpty()
+            .withMessage('O autor é obrigatório.'),
+
         body('comment')
             .trim()
             .notEmpty()
@@ -328,83 +284,138 @@ app.post(
             .isInt({ min: 1, max: 5 })
             .withMessage('A avaliação deve ser um número entre 1 e 5.')
     ],
-    async (req, res) => {
-        const projectId = Number(req.params.id);
-
-        if (!Number.isInteger(projectId) || projectId <= 0) {
-            return res.status(400).json({
-                message: 'ID do projeto inválido.'
-            });
-        }
-
-        const errors = validationResult(req);
-
-        if (!errors.isEmpty()) {
-            return res.status(400).json({
-                errors: errors.array()
-            });
-        }
-
-        const data = toFeedbackInput({
-            ...req.body,
-            projectId
-        });
-
+    async (req, res, next) => {
         try {
-            const feedback = await repositories.createFeedback(data);
+            const errors = validationResult(req);
 
-            return res.status(201).json(
+            if (!errors.isEmpty()) {
+                return res.status(400).json({
+                    message: 'Erro de validação.',
+                    errors: errors.array()
+                });
+            }
+
+            const projectId = Number(req.params.id);
+
+            if (!Number.isInteger(projectId) || projectId <= 0) {
+                return res.status(400).json({
+                    message: 'O ID do projeto deve ser um número inteiro positivo.'
+                });
+            }
+
+            const input = toFeedbackInput({
+                ...req.body,
+                projectId
+            });
+
+            const feedback = await createFeedback(input);
+
+            res.status(201).json(
                 toFeedbackResponse(feedback)
             );
         } catch (error) {
-            console.error(error);
-
-            return res.status(500).json({
-                message: 'Erro interno ao criar o feedback.'
-            });
+            next(error);
         }
     }
 );
 
 // =====================================================
-// PUT /api/projects/:id/upvote
-// Incrementar upvotes do projeto
+// UPVOTE
 // =====================================================
 
-app.put('/api/projects/:id/upvote', async (req, res) => {
-    const projectId = Number(req.params.id);
+app.put(
+    '/api/projects/:id/upvote',
+    async (req, res, next) => {
+        try {
+            const id = Number(req.params.id);
 
-    if (!Number.isInteger(projectId) || projectId <= 0) {
-        return res.status(400).json({
-            message: 'ID do projeto inválido.'
-        });
-    }
+            if (!Number.isInteger(id) || id <= 0) {
+                return res.status(400).json({
+                    message: 'O ID do projeto deve ser um número inteiro positivo.'
+                });
+            }
 
-    try {
-        const project = await repositories.upvoteProject(projectId);
+            const project = await upvoteProject(id);
 
-        if (!project) {
-            return res.status(404).json({
-                message: 'Projeto não encontrado.'
-            });
+            res.json(
+                toProjectResponse(project)
+            );
+        } catch (error) {
+            next(error);
         }
-
-        return res.json(
-            toProjectResponse(project)
-        );
-    } catch (error) {
-        console.error(error);
-
-        return res.status(500).json({
-            message: 'Erro interno ao registrar o upvote.'
-        });
     }
+);
+
+// =====================================================
+// ROTA NÃO ENCONTRADA
+// =====================================================
+
+app.use((req, res) => {
+    res.status(404).json({
+        message: `Rota não encontrada: ${req.method} ${req.originalUrl}`
+    });
 });
 
 // =====================================================
-// Inicialização do servidor
+// TRATAMENTO GLOBAL DE ERROS
+// =====================================================
+
+app.use((error, req, res, next) => {
+    console.error(error);
+
+    if (error.code === 'P2002') {
+        const target = error.meta?.target;
+
+        if (
+            Array.isArray(target) &&
+            target.includes('email')
+        ) {
+            return res.status(409).json({
+                message: 'Este e-mail já está cadastrado.'
+            });
+        }
+
+        if (
+            Array.isArray(target) &&
+            target.includes('name')
+        ) {
+            return res.status(409).json({
+                message: 'Esta tecnologia já está cadastrada.'
+            });
+        }
+
+        return res.status(409).json({
+            message: 'Já existe um registro com esses dados.'
+        });
+    }
+
+    if (error.code === 'P2025') {
+        return res.status(404).json({
+            message: 'Registro não encontrado.'
+        });
+    }
+
+    if (
+        error instanceof SyntaxError &&
+        error.status === 400 &&
+        'body' in error
+    ) {
+        return res.status(400).json({
+            message: 'JSON inválido. Verifique o formato dos dados enviados.'
+        });
+    }
+
+    return res.status(500).json({
+        message: 'Erro interno do servidor.'
+    });
+});
+
+// =====================================================
+// SERVIDOR
 // =====================================================
 
 app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(
+        `Servidor rodando em http://localhost:${PORT}`
+    );
 });
