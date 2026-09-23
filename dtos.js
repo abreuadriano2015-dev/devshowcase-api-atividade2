@@ -1,6 +1,5 @@
 // =====================================================
-// DTOs de ENTRADA: escolhem e normalizam só os campos
-// que a API aceita receber no corpo da requisição.
+// DTOs de ENTRADA
 // =====================================================
 
 function toProfileInput(body) {
@@ -24,19 +23,24 @@ function toProjectInput(body) {
         description: body.description || null,
         url: body.url,
         profileId: Number(body.profileId),
-        technologyIds: [...new Set((body.technologyIds || []).map(Number))]
+        technologyIds: [
+            ...new Set(
+                (body.technologyIds || []).map(Number)
+            )
+        ]
     };
 }
 
 function toFeedbackInput(body) {
     return {
         author: body.author,
-        comment: body.comment
+        comment: body.comment,
+        rating: Number(body.rating)
     };
 }
 
 // =====================================================
-// DTOs de SAÍDA: definem exatamente o que a API devolve.
+// DTOs de SAÍDA
 // =====================================================
 
 function toTechnologyResponse(technology) {
@@ -51,12 +55,16 @@ function toFeedbackResponse(feedback) {
         id: feedback.id,
         author: feedback.author,
         comment: feedback.comment,
+        rating: feedback.rating,
         createdAt: feedback.createdAt,
         projectId: feedback.projectId
     };
 }
 
-// Versão resumida do perfil (usada dentro de projetos, sem e-mail)
+// =====================================================
+// Perfil resumido
+// =====================================================
+
 function toProfileSummaryResponse(profile) {
     return {
         id: profile.id,
@@ -65,6 +73,10 @@ function toProfileSummaryResponse(profile) {
     };
 }
 
+// =====================================================
+// Resposta de projeto
+// =====================================================
+
 function toProjectResponse(project) {
     const response = {
         id: project.id,
@@ -72,23 +84,37 @@ function toProjectResponse(project) {
         description: project.description,
         url: project.url,
         createdAt: project.createdAt,
-        profileId: project.profileId
+        profileId: project.profileId,
+
+        averageRating: project.averageRating,
+        upvotes: project.upvotes
     };
 
     if (project.profile) {
-        response.profile = toProfileSummaryResponse(project.profile);
+        response.profile =
+            toProfileSummaryResponse(project.profile);
     }
 
     if (project.technologies) {
-        response.technologies = project.technologies.map(toTechnologyResponse);
+        response.technologies =
+            project.technologies.map(
+                toTechnologyResponse
+            );
     }
 
     if (project.feedbacks) {
-        response.feedbacks = project.feedbacks.map(toFeedbackResponse);
+        response.feedbacks =
+            project.feedbacks.map(
+                toFeedbackResponse
+            );
     }
 
     return response;
 }
+
+// =====================================================
+// Resposta de perfil
+// =====================================================
 
 function toProfileResponse(profile) {
     const response = {
@@ -101,11 +127,18 @@ function toProfileResponse(profile) {
     };
 
     if (profile.projects) {
-        response.projects = profile.projects.map(toProjectResponse);
+        response.projects =
+            profile.projects.map(
+                toProjectResponse
+            );
     }
 
     return response;
 }
+
+// =====================================================
+// Exportações
+// =====================================================
 
 module.exports = {
     toProfileInput,

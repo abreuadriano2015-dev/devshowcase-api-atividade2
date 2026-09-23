@@ -1,6 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+
 const repositories = require('./repositories');
+
 const {
     toProfileInput,
     toTechnologyInput,
@@ -18,14 +20,21 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// =====================================================
 // Rota inicial
+// =====================================================
+
 app.get('/', (req, res) => {
     res.json({
         message: 'DevShowcase API funcionando!'
     });
 });
 
-// POST /api/profiles - Criar perfil
+// =====================================================
+// POST /api/profiles
+// Criar perfil
+// =====================================================
+
 app.post(
     '/api/profiles',
     [
@@ -42,7 +51,10 @@ app.post(
         body('avatarUrl')
             .optional({ checkFalsy: true })
             .trim()
-            .isURL({ protocols: ['http', 'https'], require_protocol: true })
+            .isURL({
+                protocols: ['http', 'https'],
+                require_protocol: true
+            })
             .withMessage('Informe uma URL de avatar válida.')
     ],
     async (req, res) => {
@@ -59,7 +71,9 @@ app.post(
         try {
             const profile = await repositories.createProfile(data);
 
-            return res.status(201).json(toProfileResponse(profile));
+            return res.status(201).json(
+                toProfileResponse(profile)
+            );
         } catch (error) {
             if (error.code === 'P2002') {
                 return res.status(409).json({
@@ -76,7 +90,11 @@ app.post(
     }
 );
 
-// GET /api/profiles/:id - Consultar perfil por ID
+// =====================================================
+// GET /api/profiles/:id
+// Consultar perfil por ID
+// =====================================================
+
 app.get('/api/profiles/:id', async (req, res) => {
     const id = Number(req.params.id);
 
@@ -95,7 +113,9 @@ app.get('/api/profiles/:id', async (req, res) => {
             });
         }
 
-        return res.json(toProfileResponse(profile));
+        return res.json(
+            toProfileResponse(profile)
+        );
     } catch (error) {
         console.error(error);
 
@@ -105,7 +125,11 @@ app.get('/api/profiles/:id', async (req, res) => {
     }
 });
 
-// POST /api/technologies - Cadastrar tecnologia
+// =====================================================
+// POST /api/technologies
+// Cadastrar tecnologia
+// =====================================================
+
 app.post(
     '/api/technologies',
     [
@@ -126,9 +150,12 @@ app.post(
         const data = toTechnologyInput(req.body);
 
         try {
-            const technology = await repositories.createTechnology(data);
+            const technology =
+                await repositories.createTechnology(data);
 
-            return res.status(201).json(toTechnologyResponse(technology));
+            return res.status(201).json(
+                toTechnologyResponse(technology)
+            );
         } catch (error) {
             if (error.code === 'P2002') {
                 return res.status(409).json({
@@ -145,12 +172,19 @@ app.post(
     }
 );
 
-// GET /api/technologies - Listar tecnologias
+// =====================================================
+// GET /api/technologies
+// Listar tecnologias
+// =====================================================
+
 app.get('/api/technologies', async (req, res) => {
     try {
-        const technologies = await repositories.listTechnologies();
+        const technologies =
+            await repositories.listTechnologies();
 
-        return res.json(technologies.map(toTechnologyResponse));
+        return res.json(
+            technologies.map(toTechnologyResponse)
+        );
     } catch (error) {
         console.error(error);
 
@@ -160,7 +194,11 @@ app.get('/api/technologies', async (req, res) => {
     }
 });
 
-// POST /api/projects - Cadastrar projeto
+// =====================================================
+// POST /api/projects
+// Cadastrar projeto
+// =====================================================
+
 app.post(
     '/api/projects',
     [
@@ -171,7 +209,10 @@ app.post(
 
         body('url')
             .trim()
-            .isURL({ protocols: ['http', 'https'], require_protocol: true })
+            .isURL({
+                protocols: ['http', 'https'],
+                require_protocol: true
+            })
             .withMessage('Informe uma URL válida.'),
 
         body('profileId')
@@ -181,11 +222,15 @@ app.post(
         body('technologyIds')
             .optional()
             .isArray()
-            .withMessage('technologyIds deve ser uma lista de IDs.'),
+            .withMessage(
+                'technologyIds deve ser uma lista de IDs.'
+            ),
 
         body('technologyIds.*')
             .isInt({ min: 1 })
-            .withMessage('Cada ID de tecnologia deve ser um número válido.')
+            .withMessage(
+                'Cada ID de tecnologia deve ser um número válido.'
+            )
     ],
     async (req, res) => {
         const errors = validationResult(req);
@@ -199,13 +244,17 @@ app.post(
         const data = toProjectInput(req.body);
 
         try {
-            const project = await repositories.createProject(data);
+            const project =
+                await repositories.createProject(data);
 
-            return res.status(201).json(toProjectResponse(project));
+            return res.status(201).json(
+                toProjectResponse(project)
+            );
         } catch (error) {
             if (error.code === 'P2025') {
                 return res.status(404).json({
-                    message: 'Perfil ou tecnologia não encontrada.'
+                    message:
+                        'Perfil ou tecnologia não encontrada.'
                 });
             }
 
@@ -218,34 +267,98 @@ app.post(
     }
 );
 
-// GET /api/projects - Listar projetos
+// =====================================================
+// GET /api/projects
+// Listar projetos com filtro e paginação
+// =====================================================
+
 app.get('/api/projects', async (req, res) => {
     try {
-        const projects = await repositories.listProjects();
+        const technology =
+            typeof req.query.technology === 'string'
+                ? req.query.technology.trim()
+                : undefined;
 
-        return res.json(projects.map(toProjectResponse));
+        const page = Number(req.query.page ?? 1);
+        const limit = Number(req.query.limit ?? 10);
+
+        if (
+            !Number.isInteger(page) ||
+            page < 1
+        ) {
+            return res.status(400).json({
+                message:
+                    'O parâmetro page deve ser um número inteiro maior que zero.'
+            });
+        }
+
+        if (
+            !Number.isInteger(limit) ||
+            limit < 1 ||
+            limit > 100
+        ) {
+            return res.status(400).json({
+                message:
+                    'O parâmetro limit deve ser um número inteiro entre 1 e 100.'
+            });
+        }
+
+        const result =
+            await repositories.listProjects({
+                technology,
+                page,
+                limit
+            });
+
+        return res.json({
+            data: result.projects.map(toProjectResponse),
+
+            pagination: {
+                page,
+                limit,
+                total: result.total,
+                totalPages: Math.ceil(
+                    result.total / limit
+                )
+            }
+        });
     } catch (error) {
         console.error(error);
 
         return res.status(500).json({
-            message: 'Erro interno ao consultar os projetos.'
+            message:
+                'Erro interno ao consultar os projetos.'
         });
     }
 });
 
-// POST /api/projects/:id/feedbacks - Cadastrar feedback
+// =====================================================
+// POST /api/projects/:id/feedbacks
+// Cadastrar feedback com nota de 1 a 5
+// =====================================================
+
 app.post(
     '/api/projects/:id/feedbacks',
     [
         body('author')
             .trim()
             .notEmpty()
-            .withMessage('O nome do autor é obrigatório.'),
+            .withMessage(
+                'O nome do autor é obrigatório.'
+            ),
 
         body('comment')
             .trim()
             .notEmpty()
-            .withMessage('O comentário é obrigatório.')
+            .withMessage(
+                'O comentário é obrigatório.'
+            ),
+
+        body('rating')
+            .isInt({ min: 1, max: 5 })
+            .withMessage(
+                'A nota deve ser um número inteiro entre 1 e 5.'
+            )
     ],
     async (req, res) => {
         const errors = validationResult(req);
@@ -258,22 +371,29 @@ app.post(
 
         const projectId = Number(req.params.id);
 
-        if (!Number.isInteger(projectId) || projectId <= 0) {
+        if (
+            !Number.isInteger(projectId) ||
+            projectId <= 0
+        ) {
             return res.status(400).json({
                 message: 'ID do projeto inválido.'
             });
         }
 
-        const { author, comment } = toFeedbackInput(req.body);
+        const data = toFeedbackInput(req.body);
 
         try {
-            const feedback = await repositories.createFeedback({
-                projectId,
-                author,
-                comment
-            });
+            const feedback =
+                await repositories.createFeedback({
+                    projectId,
+                    author: data.author,
+                    comment: data.comment,
+                    rating: data.rating
+                });
 
-            return res.status(201).json(toFeedbackResponse(feedback));
+            return res.status(201).json(
+                toFeedbackResponse(feedback)
+            );
         } catch (error) {
             if (error.code === 'P2025') {
                 return res.status(404).json({
@@ -284,17 +404,74 @@ app.post(
             console.error(error);
 
             return res.status(500).json({
-                message: 'Erro interno ao cadastrar o feedback.'
+                message:
+                    'Erro interno ao cadastrar o feedback.'
             });
         }
     }
 );
 
+// =====================================================
+// PUT /api/projects/:id/upvote
+// Incrementar curtidas do projeto
+// =====================================================
+
+app.put(
+    '/api/projects/:id/upvote',
+    async (req, res) => {
+        const projectId = Number(req.params.id);
+
+        if (
+            !Number.isInteger(projectId) ||
+            projectId <= 0
+        ) {
+            return res.status(400).json({
+                message: 'ID do projeto inválido.'
+            });
+        }
+
+        try {
+            const project =
+                await repositories.upvoteProject(
+                    projectId
+                );
+
+            return res.json({
+                message:
+                    'Curtida adicionada com sucesso.',
+                project: toProjectResponse(project)
+            });
+        } catch (error) {
+            if (error.code === 'P2025') {
+                return res.status(404).json({
+                    message: 'Projeto não encontrado.'
+                });
+            }
+
+            console.error(error);
+
+            return res.status(500).json({
+                message:
+                    'Erro interno ao adicionar a curtida.'
+            });
+        }
+    }
+);
+
+// =====================================================
+// Iniciar servidor
+// =====================================================
+
 app.listen(PORT, (error) => {
     if (error) {
-        console.error('Erro ao iniciar o servidor:', error.message);
+        console.error(
+            'Erro ao iniciar o servidor:',
+            error.message
+        );
         return;
     }
 
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(
+        `Servidor rodando em http://localhost:${PORT}`
+    );
 });
