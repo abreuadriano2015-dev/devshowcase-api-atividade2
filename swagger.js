@@ -10,11 +10,13 @@ const options = {
                 'API para gerenciamento de perfis, projetos, tecnologias e feedbacks.'
         },
         servers: [
-            {
-                url: 'http://localhost:3000',
-                description: 'Servidor local'
-            }
-        ],
+    {
+        url: process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000',
+        description: process.env.RENDER_EXTERNAL_URL
+            ? 'Servidor em produção'
+            : 'Servidor local'
+    }
+],
         paths: {
             '/': {
                 get: {
