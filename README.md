@@ -175,4 +175,259 @@ https://devshowcase-api-atividade2-diux.onrender.com
 https://devshowcase-api-atividade2-diux.onrender.com/api-docs
 ```
 
-O projeto utiliza variáveis de
+O projeto utiliza variáveis de ambiente para configurar as credenciais do banco de dados no ambiente de produção.
+
+O deploy é realizado a partir do repositório GitHub conectado ao Render.
+
+## Endpoints
+
+### Profiles
+
+#### Criar perfil
+
+`POST /api/profiles`
+
+Exemplo de corpo da requisição:
+
+```json
+{
+  "name": "Maria Silva",
+  "email": "maria@example.com",
+  "bio": "Desenvolvedora backend",
+  "avatarUrl": "https://exemplo.com/foto.png"
+}
+```
+
+#### Buscar perfil por ID
+
+`GET /api/profiles/{id}`
+
+Retorna o perfil e seus projetos relacionados.
+
+---
+
+### Technologies
+
+#### Criar tecnologia
+
+`POST /api/technologies`
+
+Exemplo:
+
+```json
+{
+  "name": "Node.js"
+}
+```
+
+#### Listar tecnologias
+
+`GET /api/technologies`
+
+---
+
+### Projects
+
+#### Criar projeto
+
+`POST /api/projects`
+
+Exemplo:
+
+```json
+{
+  "title": "Meu projeto",
+  "description": "Descrição do projeto",
+  "url": "https://github.com/usuario/projeto",
+  "profileId": 1,
+  "technologyIds": [1, 2]
+}
+```
+
+#### Listar projetos
+
+`GET /api/projects`
+
+A consulta retorna os projetos juntamente com o perfil, as tecnologias, os feedbacks, a média das avaliações e a quantidade de upvotes.
+
+#### Filtrar projetos por tecnologia
+
+Exemplo:
+
+`GET /api/projects?technology=JavaScript`
+
+#### Paginação
+
+Exemplo:
+
+`GET /api/projects?page=1&limit=10`
+
+Também é possível combinar filtro e paginação:
+
+`GET /api/projects?technology=JavaScript&page=1&limit=10`
+
+---
+
+### Feedbacks
+
+#### Criar feedback
+
+`POST /api/projects/{id}/feedbacks`
+
+Exemplo:
+
+```json
+{
+  "author": "Ana",
+  "comment": "Gostei da organização do projeto!",
+  "rating": 5
+}
+```
+
+A avaliação deve ser um número entre **1 e 5**.
+
+Após o cadastro de um feedback, a API recalcula a média das avaliações do projeto.
+
+---
+
+### Upvote
+
+#### Registrar upvote em um projeto
+
+`PUT /api/projects/{id}/upvote`
+
+Exemplo:
+
+`PUT /api/projects/7/upvote`
+
+Esse endpoint incrementa em 1 a quantidade de upvotes do projeto. Não é necessário enviar corpo na requisição.
+
+## Validações
+
+A API utiliza `express-validator` para validar os dados recebidos.
+
+Entre as validações implementadas estão:
+
+* Nome e e-mail obrigatórios no perfil.
+* E-mail válido e único.
+* Nome da tecnologia obrigatório e único.
+* Título do projeto obrigatório.
+* URL do projeto válida.
+* `profileId` válido.
+* `technologyIds` deve conter tecnologias informadas.
+* Autor e comentário do feedback obrigatórios.
+* Avaliação do feedback entre 1 e 5.
+* IDs recebidos nas rotas devem ser números inteiros positivos.
+
+Além das validações de entrada, o Prisma e o banco de dados garantem a integridade dos relacionamentos entre perfis, projetos e tecnologias.
+
+## Tratamento de erros
+
+A API possui tratamento global de exceções para fornecer respostas HTTP adequadas ao cliente.
+
+Entre os casos tratados estão:
+
+* Dados inválidos.
+* JSON inválido.
+* Registro não encontrado.
+* E-mail ou tecnologia duplicados.
+* Rotas inexistentes.
+* Erros internos do servidor.
+
+## DTOs
+
+O projeto utiliza DTOs para organizar os dados de entrada e saída.
+
+### DTOs de entrada
+
+Transformam os dados recebidos nas requisições antes de enviá-los ao repositório.
+
+### DTOs de saída
+
+Controlam os dados retornados pela API.
+
+Por exemplo, quando um projeto retorna seu perfil relacionado, são apresentados apenas os dados resumidos do perfil, evitando informações desnecessárias.
+
+## Repositories
+
+A camada de repositórios concentra as operações realizadas no banco de dados através do Prisma.
+
+Entre as operações estão:
+
+* Criação e consulta de perfis.
+* Criação e listagem de tecnologias.
+* Criação e listagem de projetos.
+* Filtragem e paginação de projetos.
+* Criação de feedbacks.
+* Atualização da média das avaliações.
+* Registro de upvotes.
+
+## Códigos HTTP utilizados
+
+| Código | Significado                     |
+| ------ | ------------------------------- |
+| 200    | Operação realizada com sucesso  |
+| 201    | Registro criado com sucesso     |
+| 400    | Dados inválidos                 |
+| 404    | Registro ou rota não encontrada |
+| 409    | Registro já existente           |
+| 500    | Erro interno do servidor        |
+
+## Testes realizados
+
+Durante o desenvolvimento e a publicação, os principais endpoints foram testados através do Swagger, tanto no ambiente local quanto no ambiente de produção.
+
+Foram realizados testes de:
+
+* Criação de perfil.
+* Consulta de perfil.
+* Criação de tecnologia.
+* Listagem de tecnologias.
+* Criação de projeto.
+* Listagem de projetos.
+* Filtro por tecnologia.
+* Paginação.
+* Criação de feedback.
+* Atualização da média de avaliações.
+* Registro de upvote.
+* Validações de entrada.
+* Tratamento de erros.
+* Swagger em produção.
+* Persistência dos dados no PostgreSQL de produção.
+
+## Resultado testado em produção
+
+Durante os testes realizados no ambiente de produção, a API apresentou:
+
+* Projeto cadastrado com sucesso.
+* Tecnologia `JavaScript` relacionada ao projeto.
+* Dois feedbacks cadastrados.
+* Média das avaliações calculada em **4,5**.
+* **1 upvote** registrado.
+* Filtro por `JavaScript` retornando o projeto corretamente.
+* HTTP **200** na consulta do projeto filtrado.
+
+Exemplo simplificado:
+
+```json
+{
+  "id": 1,
+  "title": "Meu projeto em produção",
+  "averageRating": 4.5,
+  "upvotes": 1,
+  "profileId": 1,
+  "technologies": [
+    {
+      "id": 1,
+      "name": "JavaScript"
+    }
+  ]
+}
+```
+
+## Repositório
+
+Projeto disponível no GitHub:
+
+https://github.com/abreuadriano2015-dev/devshowcase-api-atividade2
+
